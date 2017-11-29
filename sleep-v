@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+
+begin
+  if ARGV.size < 1
+    $stderr.puts "usage: #{$0} NUMBER[SUFFIX]..."
+    exit 1
+  end
+
+  seconds = ARGV.map do |str|
+    m = str.match(%r{([0-9]*(\.[0-9]*)?)(.*)?})
+    number = m[1].to_f
+    suffix = m[3]
+    suffix_map = {
+      "" => 1,
+      "s" => 1,
+      "m" => 60,
+      "h" => 3600,
+      "d" => 3600 * 24
+    }
+    multiplier = suffix_map[suffix]
+    unless multiplier
+      valid_suffixes = suffix_map.keys
+      $stderr.puts "unknown suffix #{suffix.inspect}.  it must be one of #{valid_suffixes.inspect}"
+      exit 1
+    end
+    number * multiplier
+  end.reduce { |a, b| a + b }
+
+  begin
+    s = seconds - seconds.to_i
+    sleep(s)
+    seconds = seconds.to_i
+  end
+
+  while seconds > 0
+    if seconds < 10
+      $stderr.write seconds.to_i
+      s = 1
+      sleep(s)
+      seconds -= s
+    elsif seconds < 60
+      $stderr.write ":"
+      s = [10, seconds - 9].min
+      sleep(s)
+      seconds -= s
+    elsif seconds <= 600
+      $stderr.write "#{seconds / 60}m"
+      s = [60, seconds - 59].min
+      sleep(s)
+      seconds -= s
+    else
+      $stderr.write "#{seconds / 60}m"
+      s = [300, seconds - 600].min
+      sleep(s)
+      seconds -= s
+    end
+  end
+end
