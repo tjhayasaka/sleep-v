@@ -1,8 +1,50 @@
 #!/usr/bin/env ruby
 
+$suffix_to_seconds = {
+  "" => 1,
+  "s" => 1,
+  "m" => 60,
+  "h" => 3600,
+  "d" => 3600 * 24
+}
+
+def usage_exit(code)
+  raise "exit (code = #{code})" if ENV["SLEEP_V_RDOCTEST"]
+
+  valid_suffixes = $suffix_to_seconds.keys
+
+  $stderr.puts <<EOS
+usage: #{$0} [-h|--help] [-n|--dry-run] NUMBER[SUFFIX]..."
+
+suffix must be one of #{valid_suffixes.inspect}
+
+example:
+    $ sleep-v 1.5; echo X # sleeps 1.5 seconds
+    1X
+
+    $ sleep-v 13; echo X # sleeps 13 seconds
+    ::987654321X
+
+    $ sleep-v 1h 23m 45.67; echo X # sleeps 5025.67 seconds (== 83 mins + 45.67 secs)
+    83m80m75m70m65m60m55m50m45m40m35m30m25m20m15m10m9m8m7m6m5m4m3m2m1m::::::987654321X
+EOS
+
+  exit code
+end
+
+
 # to test with rdoctest:
 #   $ gem install rdoctest
 #   $ SLEEP_V_RDOCTEST=1 rdoctest -I. sleep-v
+
+def expect_exception()
+  begin
+    yield
+    raise "no exceptions raised while it's expected"
+  rescue RuntimeError => ex
+    ex.message
+  end
+end
 
 # on regular step:
 #   next_time_step(1) # => ["1", 1]
@@ -43,31 +85,51 @@ def next_time_step(seconds)
   end
 end
 
-def main
-  if ARGV.size < 1
-    $stderr.puts "usage: #{$0} NUMBER[SUFFIX]..."
-    exit 1
+#   process_argv(%w()) # => [{:dry_run=>false}, 0]
+#   process_argv(%w(3)) # => [{:dry_run=>false}, 3.0]
+#   process_argv(%w(3.14)) # => [{:dry_run=>false}, 3.14]
+#   process_argv(%w(1 2.3 4.5)) # => [{:dry_run=>false}, 7.8]
+#   process_argv(%w(2m)) # => [{:dry_run=>false}, 120.0]
+#   process_argv(%w(2.5m)) # => [{:dry_run=>false}, 150.0]
+#   process_argv(%w(2h)) # => [{:dry_run=>false}, 7200.0]
+#   process_argv(%w(2.5h)) # => [{:dry_run=>false}, 9000.0]
+#   process_argv(%w(1h 23m 45.67)) # => [{:dry_run=>false}, 5025.67]
+#   process_argv(%w(-n)) # => [{:dry_run=>true}, 0]
+#   process_argv(%w(--dry-run)) # => [{:dry_run=>true}, 0]
+#   process_argv(%w(1 -n)) # => [{:dry_run=>true}, 1.0]
+#   process_argv(%w(-n 1)) # => [{:dry_run=>true}, 1.0]
+#   expect_exception() { process_argv(%w(1x)) } # => "exit (code = 1)"
+#   expect_exception() { process_argv(%w(-h)) } # => "exit (code = 0)"
+#   expect_exception() { process_argv(%w(--help)) } # => "exit (code = 0)"
+def process_argv(argv)
+  options = argv.reduce({seconds: 0, dry_run: false}) do |options, arg|
+    case arg
+    when /(-h|--help)/
+      usage_exit(0)
+    when /(-n|--dry-run)/
+      options.merge({dry_run: true})
+    else
+      m = arg.match(%r{([0-9]*(\.[0-9]*)?)(.*)?})
+      number = m[1].to_f
+      suffix = m[3]
+      multiplier = $suffix_to_seconds[suffix]
+      unless multiplier
+        valid_suffixes = $suffix_to_seconds.keys
+        $stderr.puts "unknown suffix #{suffix.inspect}.  it must be one of #{valid_suffixes.inspect}" unless ENV["SLEEP_V_RDOCTEST"]
+        usage_exit(1)
+      end
+      options.merge({seconds: options[:seconds] + number * multiplier})
+    end
   end
 
-  seconds = ARGV.map do |str|
-    m = str.match(%r{([0-9]*(\.[0-9]*)?)(.*)?})
-    number = m[1].to_f
-    suffix = m[3]
-    suffix_map = {
-      "" => 1,
-      "s" => 1,
-      "m" => 60,
-      "h" => 3600,
-      "d" => 3600 * 24
-    }
-    multiplier = suffix_map[suffix]
-    unless multiplier
-      valid_suffixes = suffix_map.keys
-      $stderr.puts "unknown suffix #{suffix.inspect}.  it must be one of #{valid_suffixes.inspect}"
-      exit 1
-    end
-    number * multiplier
-  end.reduce { |a, b| a + b }
+  seconds = options.delete(:seconds)
+  [options, seconds]
+end
+
+def main
+  usage_exit(1) if ARGV.size < 1
+
+  options, seconds = process_argv(ARGV)
 
   begin
     s = seconds - seconds.to_i
@@ -78,7 +140,7 @@ def main
   while seconds > 0
     message, step = next_time_step(seconds)
     $stderr.write message
-    sleep(step)
+    sleep(step) unless options[:dry_run]
     seconds -= step
   end
 end
