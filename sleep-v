@@ -1,6 +1,49 @@
 #!/usr/bin/env ruby
 
-begin
+# to test with rdoctest:
+#   $ gem install rdoctest
+#   $ SLEEP_V_RDOCTEST=1 rdoctest -I. sleep-v
+
+# on regular step:
+#   next_time_step(1) # => ["1", 1]
+#   next_time_step(2) # => ["2", 1]
+#   next_time_step(8) # => ["8", 1]
+#   next_time_step(9) # => ["9", 1]
+#   next_time_step(10) # => [":", 1]
+#   next_time_step(20) # => [":", 10]
+#   next_time_step(50) # => [":", 10]
+#   next_time_step(60) # => ["1m", 1]
+#   next_time_step(540) # => ["9m", 60]
+#   next_time_step(600) # => ["10m", 60]
+#   next_time_step(900) # => ["15m", 300]
+#
+# align onto regular steps:
+#   next_time_step(11) # => [":", 1]
+#   next_time_step(19) # => [":", 9]
+#   next_time_step(61) # => ["1m", 1]
+#   next_time_step(69) # => ["1m", 9]
+#   next_time_step(599) # => ["9m", 59]
+#   next_time_step(601) # => ["10m", 1]
+#   next_time_step(899) # => ["14m", 299]
+#   next_time_step(901) # => ["15m", 1]
+def next_time_step(seconds)
+  raise "assertion failed: seconds must be an integer.  (got #{seconds})" unless seconds.integer?
+  if seconds < 10
+    ["#{seconds}",
+     1]
+  elsif seconds < 60
+    [":",
+     [10, (seconds - 1) % 10 + 1, seconds - 9].min]
+  elsif seconds < 600
+    ["#{seconds / 60}m",
+     [60, (seconds - 1) % 60 + 1, seconds - 59].min]
+  else
+    ["#{seconds / 60}m",
+     [300, (seconds - 1) % 300 + 1, seconds - 540].min]
+  end
+end
+
+def main
   if ARGV.size < 1
     $stderr.puts "usage: #{$0} NUMBER[SUFFIX]..."
     exit 1
@@ -33,20 +76,11 @@ begin
   end
 
   while seconds > 0
-    s = if seconds < 10
-          $stderr.write seconds.to_i
-          1
-        elsif seconds < 60
-          $stderr.write ":"
-          [10, seconds - 9].min
-        elsif seconds <= 600
-          $stderr.write "#{seconds / 60}m"
-          [60, seconds - 59].min
-        else
-          $stderr.write "#{seconds / 60}m"
-          [300, seconds - 600].min
-        end
-    sleep(s)
-    seconds -= s
+    message, step = next_time_step(seconds)
+    $stderr.write message
+    sleep(step)
+    seconds -= step
   end
 end
+
+main unless ENV["SLEEP_V_RDOCTEST"]
