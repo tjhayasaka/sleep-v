@@ -33,26 +33,20 @@ begin
   end
 
   while seconds > 0
-    if seconds < 10
-      $stderr.write seconds.to_i
-      s = 1
-      sleep(s)
-      seconds -= s
-    elsif seconds < 60
-      $stderr.write ":"
-      s = [10, seconds - 9].min
-      sleep(s)
-      seconds -= s
-    elsif seconds <= 600
-      $stderr.write "#{seconds / 60}m"
-      s = [60, seconds - 59].min
-      sleep(s)
-      seconds -= s
-    else
-      $stderr.write "#{seconds / 60}m"
-      s = [300, seconds - 600].min
-      sleep(s)
-      seconds -= s
-    end
+    s = if seconds < 10
+          $stderr.write seconds.to_i
+          1
+        elsif seconds < 60
+          $stderr.write ":"
+          [10, seconds - 9].min
+        elsif seconds <= 600
+          $stderr.write "#{seconds / 60}m"
+          [60, seconds - 59].min
+        else
+          $stderr.write "#{seconds / 60}m"
+          [300, seconds - 600].min
+        end
+    sleep(s)
+    seconds -= s
   end
 end
